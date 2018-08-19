@@ -187,7 +187,7 @@ namespace Platformer2D
             // Load the level.
             string levelPath = string.Format("Content/Levels/{0}.txt", levelIndex);
             using (Stream fileStream = TitleContainer.OpenStream(levelPath))
-                level = new Level(Services, fileStream, levelIndex);
+                level = new Level(Services, fileStream, levelIndex, spriteBatch);
         }
 
         private void ReloadCurrentLevel()

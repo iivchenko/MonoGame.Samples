@@ -20,7 +20,7 @@ namespace Platformer2D
     /// as wide as each animation is tall. The number of frames in the
     /// animation are inferred from this.
     /// </remarks>
-    class Animation
+    class old_Animation
     {
         /// <summary>
         /// All frames in the animation arranged horizontally.
@@ -78,7 +78,7 @@ namespace Platformer2D
         /// <summary>
         /// Constructors a new animation.
         /// </summary>        
-        public Animation(Texture2D texture, float frameTime, bool isLooping)
+        public old_Animation(Texture2D texture, float frameTime, bool isLooping)
         {
             this.texture = texture;
             this.frameTime = frameTime;

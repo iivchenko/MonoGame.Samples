@@ -23,8 +23,11 @@ namespace Platformer2D
     /// The level owns the player and controls the game's win and lose
     /// conditions as well as scoring.
     /// </summary>
-    class Level : IDisposable
+    public sealed class Level : IDisposable
     {
+        private readonly GemFactory _gemFactory;
+        private readonly EnemyFactory _enemyFactory;
+        
         // Physical structure of the level.
         private Tile[,] tiles;
         private Texture2D[] layers;
@@ -89,14 +92,17 @@ namespace Platformer2D
         /// <param name="fileStream">
         /// A stream containing the tile data.
         /// </param>
-        public Level(IServiceProvider serviceProvider, Stream fileStream, int levelIndex)
+        public Level(IServiceProvider serviceProvider, Stream fileStream, int levelIndex, SpriteBatch spriteBatch)
         {
             // Create a new content manager to load content used just by this level.
             content = new ContentManager(serviceProvider, "Content");
+            
+            _gemFactory = new GemFactory(serviceProvider);
+            _enemyFactory = new EnemyFactory(serviceProvider, spriteBatch);
 
             timeRemaining = TimeSpan.FromMinutes(2.0);
 
-            LoadTiles(fileStream);
+            LoadTiles(fileStream, spriteBatch);
 
             // Load background layer textures. For now, all levels must
             // use the same backgrounds and only use the left-most part of them.
@@ -120,7 +126,7 @@ namespace Platformer2D
         /// <param name="fileStream">
         /// A stream containing the tile data.
         /// </param>
-        private void LoadTiles(Stream fileStream)
+        private void LoadTiles(Stream fileStream, SpriteBatch spriteBatch)
         {
             // Load the level and ensure all of the lines are the same length.
             int width;
@@ -148,7 +154,7 @@ namespace Platformer2D
                 {
                     // to load each tile.
                     char tileType = lines[y][x];
-                    tiles[x, y] = LoadTile(tileType, x, y);
+                    tiles[x, y] = LoadTile(tileType, x, y, spriteBatch);
                 }
             }
 
@@ -159,22 +165,8 @@ namespace Platformer2D
                 throw new NotSupportedException("A level must have an exit.");
 
         }
-
-        /// <summary>
-        /// Loads an individual tile's appearance and behavior.
-        /// </summary>
-        /// <param name="tileType">
-        /// The character loaded from the structure file which
-        /// indicates what should be loaded.
-        /// </param>
-        /// <param name="x">
-        /// The X location of this tile in tile space.
-        /// </param>
-        /// <param name="y">
-        /// The Y location of this tile in tile space.
-        /// </param>
-        /// <returns>The loaded tile.</returns>
-        private Tile LoadTile(char tileType, int x, int y)
+       
+        private Tile LoadTile(char tileType, int x, int y, SpriteBatch spriteBatch)
         {
             switch (tileType)
             {
@@ -196,13 +188,13 @@ namespace Platformer2D
 
                 // Various enemies
                 case 'A':
-                    return LoadEnemyTile(x, y, "MonsterA");
+                    return LoadEnemyTile(x, y, "MonsterA", spriteBatch);
                 case 'B':
-                    return LoadEnemyTile(x, y, "MonsterB");
+                    return LoadEnemyTile(x, y, "MonsterB", spriteBatch);
                 case 'C':
-                    return LoadEnemyTile(x, y, "MonsterC");
+                    return LoadEnemyTile(x, y, "MonsterC", spriteBatch);
                 case 'D':
-                    return LoadEnemyTile(x, y, "MonsterD");
+                    return LoadEnemyTile(x, y, "MonsterD", spriteBatch);
 
                 // Platform block
                 case '~':
@@ -214,7 +206,7 @@ namespace Platformer2D
 
                 // Player 1 start point
                 case '1':
-                    return LoadStartTile(x, y);
+                    return LoadStartTile(spriteBatch, x, y);
 
                 // Impassable block
                 case '#':
@@ -263,13 +255,15 @@ namespace Platformer2D
         /// <summary>
         /// Instantiates a player, puts him in the level, and remembers where to put him when he is resurrected.
         /// </summary>
-        private Tile LoadStartTile(int x, int y)
+        private Tile LoadStartTile(SpriteBatch spriteBatch, int x, int y)
         {
             if (Player != null)
                 throw new NotSupportedException("A level may only have one starting point.");
 
             start = RectangleExtensions.GetBottomCenter(GetBounds(x, y));
-            player = new Player(this, start);
+            var idle = Content.Load<Texture2D>("Sprites/Player/Idle");
+            
+            player = new Player(spriteBatch, idle, this, start);
 
             return new Tile(null, TileCollision.Passable);
         }
@@ -290,10 +284,10 @@ namespace Platformer2D
         /// <summary>
         /// Instantiates an enemy and puts him in the level.
         /// </summary>
-        private Tile LoadEnemyTile(int x, int y, string spriteSet)
+        private Tile LoadEnemyTile(int x, int y, string spriteSet, SpriteBatch spriteBatch)
         {
             Vector2 position = RectangleExtensions.GetBottomCenter(GetBounds(x, y));
-            enemies.Add(new Enemy(this, position, spriteSet));
+            enemies.Add(_enemyFactory.Create(this, position, spriteSet));
 
             return new Tile(null, TileCollision.Passable);
         }
@@ -304,7 +298,7 @@ namespace Platformer2D
         private Tile LoadGemTile(int x, int y)
         {
             Point position = GetBounds(x, y).Center;
-            gems.Add(new Gem(this, new Vector2(position.X, position.Y)));
+            gems.Add(_gemFactory.Create(new Vector2(position.X, position.Y)));
 
             return new Tile(null, TileCollision.Passable);
         }
@@ -463,7 +457,7 @@ namespace Platformer2D
         /// <param name="collectedBy">The player who collected this gem.</param>
         private void OnGemCollected(Gem gem, Player collectedBy)
         {
-            score += Gem.PointValue;
+            score += gem.Scores;
 
             gem.OnCollected(collectedBy);
         }
@@ -518,7 +512,7 @@ namespace Platformer2D
             Player.Draw(gameTime, spriteBatch);
 
             foreach (Enemy enemy in enemies)
-                enemy.Draw(gameTime, spriteBatch);
+                enemy.Draw(gameTime);
 
             for (int i = EntityLayer + 1; i < layers.Length; ++i)
                 spriteBatch.Draw(layers[i], Vector2.Zero, Color.White);

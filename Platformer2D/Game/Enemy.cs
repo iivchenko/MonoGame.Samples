@@ -1,179 +1,184 @@
-﻿#region File Description
-//-----------------------------------------------------------------------------
-// Enemy.cs
-//
-// Microsoft XNA Community Game Platform
-// Copyright (C) Microsoft Corporation. All rights reserved.
-//-----------------------------------------------------------------------------
-#endregion
+﻿// TODO: Make enemy idle when player dies or winss
+// TODO: Replace LEVEL with Collider
 
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Platformer2D.Graphics;
 
 namespace Platformer2D
 {
     /// <summary>
-    /// Facing direction along the X axis.
-    /// </summary>
-    enum FaceDirection
-    {
-        Left = -1,
-        Right = 1,
-    }
-
-    /// <summary>
     /// A monster who is impeding the progress of our fearless adventurer.
     /// </summary>
-    class Enemy
+    public class Enemy
     {
-        public Level Level
-        {
-            get { return level; }
-        }
-        Level level;
+        private readonly IState _idleState;
+        private readonly IState _moveLeftState;
+        private readonly IState _moveRightState;
+        private IState _state;
 
-        /// <summary>
-        /// Position in world space of the bottom center of this enemy.
-        /// </summary>
-        public Vector2 Position
-        {
-            get { return position; }
-        }
-        Vector2 position;
+        private readonly Vector2 _origin;
+        private readonly int _width;
+        private readonly int _height;
 
-        private Rectangle localBounds;
-        /// <summary>
-        /// Gets a rectangle which bounds this enemy in world space.
-        /// </summary>
-        public Rectangle BoundingRectangle
-        {
-            get
-            {
-                int left = (int)Math.Round(Position.X - sprite.Origin.X) + localBounds.X;
-                int top = (int)Math.Round(Position.Y - sprite.Origin.Y) + localBounds.Y;
-
-                return new Rectangle(left, top, localBounds.Width, localBounds.Height);
-            }
-        }
-
-        // Animations
-        private Animation runAnimation;
-        private Animation idleAnimation;
-        private AnimationPlayer sprite;
-
-        /// <summary>
-        /// The direction this enemy is facing and moving along the X axis.
-        /// </summary>
-        private FaceDirection direction = FaceDirection.Left;
-
-        /// <summary>
-        /// How long this enemy has been waiting before turning around.
-        /// </summary>
-        private float waitTime;
-
-        /// <summary>
-        /// How long to wait before turning around.
-        /// </summary>
-        private const float MaxWaitTime = 0.5f;
-
-        /// <summary>
-        /// The speed at which this enemy moves along the X axis.
-        /// </summary>
-        private const float MoveSpeed = 64.0f;
+        private Vector2 _position;
+        private FaceDirection _direction = FaceDirection.Left;
 
         /// <summary>
         /// Constructs a new Enemy.
         /// </summary>
-        public Enemy(Level level, Vector2 position, string spriteSet)
+        public Enemy(
+            Level level, 
+            Vector2 position, 
+            Texture2D idleTexture, 
+            Texture2D runTexture,
+            SpriteBatch spriteBatch)
         {
-            this.level = level;
-            this.position = position;
+            _position = position;
 
-            LoadContent(spriteSet);
+            _idleState = new IdleState(this, CreateAnimation(spriteBatch, idleTexture, SpriteEffects.None));
+            _moveLeftState = new MoveState(this, CreateAnimation(spriteBatch, runTexture, SpriteEffects.None), level);
+            _moveRightState = new MoveState(this,  CreateAnimation(spriteBatch, runTexture, SpriteEffects.FlipHorizontally), level);
+
+            _state = _idleState;
+
+            _width = (int) (idleTexture.Height * 0.35);
+            _height = (int) (idleTexture.Height * 0.7);
+
+            _origin = new Vector2(_width / 2.0f, _height);
         }
+        
+        public Rectangle BoundingRectangle =>
+            new Rectangle
+            (
+                (int) Math.Round(_position.X - _origin.X),
+                (int) Math.Round(_position.Y - _origin.Y),
+                _width,
+                _height
+            );
 
-        /// <summary>
-        /// Loads a particular enemy sprite sheet and sounds.
-        /// </summary>
-        public void LoadContent(string spriteSet)
-        {
-            // Load animations.
-            spriteSet = "Sprites/" + spriteSet + "/";
-            runAnimation = new Animation(Level.Content.Load<Texture2D>(spriteSet + "Run"), 0.1f, true);
-            idleAnimation = new Animation(Level.Content.Load<Texture2D>(spriteSet + "Idle"), 0.15f, true);
-            sprite.PlayAnimation(idleAnimation);
-
-            // Calculate bounds within texture size.
-            int width = (int)(idleAnimation.FrameWidth * 0.35);
-            int left = (idleAnimation.FrameWidth - width) / 2;
-            int height = (int)(idleAnimation.FrameWidth * 0.7);
-            int top = idleAnimation.FrameHeight - height;
-            localBounds = new Rectangle(left, top, width, height);
-        }
-
-
-        /// <summary>
-        /// Paces back and forth along a platform, waiting at either end.
-        /// </summary>
         public void Update(GameTime gameTime)
         {
-            float elapsed = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            _state.Update(gameTime);
+        }
 
-            // Calculate tile position based on the side we are walking towards.
-            float posX = Position.X + localBounds.Width / 2 * (int)direction;
-            int tileX = (int)Math.Floor(posX / Tile.Width) - (int)direction;
-            int tileY = (int)Math.Floor(Position.Y / Tile.Height);
+        public void Draw(GameTime gameTime)
+        {
+            _state.Draw();
+        }
 
-            if (waitTime > 0)
+        private static Animation CreateAnimation(SpriteBatch spriteBatch, Texture2D texture, SpriteEffects effects)
+        {
+            var frames = new List<Frame>();
+            for (var i = 0; i < texture.Width / texture.Height; i++)
             {
-                // Wait for some amount of time.
-                waitTime = Math.Max(0.0f, waitTime - (float)gameTime.ElapsedGameTime.TotalSeconds);
-                if (waitTime <= 0.0f)
+                frames.Add(new Frame(spriteBatch, texture,
+                    new Rectangle(i * texture.Height, 0, texture.Height, texture.Height), effects));
+            }
+
+            return new Animation(frames.ToArray(), 0.15f);
+        }
+
+        private enum FaceDirection
+        {
+            Left = -1,
+            Right = 1,
+        }
+        
+        private interface IState
+        {
+            void Update(GameTime gameTime);
+
+            void Draw();
+        }
+
+        private class IdleState : IState
+        {
+            private const float MaxWaitTime = 0.5f;
+            
+            private readonly Enemy _context;
+            private readonly Animation _animation;
+            
+            private float _waitTime;
+
+            public IdleState(Enemy context, Animation animation)
+            {
+                _context = context;
+                _animation = animation;
+            }
+
+            public void Update(GameTime gameTime)
+            {
+                _animation.Update(gameTime, _context._position);
+                
+                _waitTime = Math.Max(0.0f, _waitTime - (float) gameTime.ElapsedGameTime.TotalSeconds);
+                
+                if (_waitTime <= 0.0f)
                 {
-                    // Then turn around.
-                    direction = (FaceDirection)(-(int)direction);
+                    _waitTime = MaxWaitTime;
+                    
+                    _context._direction = (FaceDirection) (-(int) _context._direction);
+
+                    _context._state =
+                        _context._direction == FaceDirection.Left
+                            ? _context._moveLeftState
+                            : _context._moveRightState;
+                    
+                    _context._state.Update(gameTime);
                 }
             }
-            else
+
+            public void Draw()
             {
-                // If we are about to run into a wall or off a cliff, start waiting.
-                if (Level.GetCollision(tileX + (int)direction, tileY - 1) == TileCollision.Impassable ||
-                    Level.GetCollision(tileX + (int)direction, tileY) == TileCollision.Passable)
+                _animation.Draw();
+            }
+        }
+
+        private class MoveState : IState
+        {
+            private const float MoveSpeed = 64.0f;
+            
+            private readonly Enemy _context;
+            private readonly Animation _animation;
+            private readonly Level _level;
+
+            public MoveState(Enemy context, Animation animation, Level level)
+            {
+                _context = context;
+                _animation = animation;
+                _level = level;
+            }
+
+            public void Update(GameTime gameTime)
+            {
+                var elapsed = (float) gameTime.ElapsedGameTime.TotalSeconds;
+                var posX = _context._position.X + _context._origin.X * (int) _context._direction;
+
+                var tileX = (int) Math.Floor(posX / Tile.Width) - (int) _context._direction;
+                var tileY = (int) Math.Floor(_context._position.Y / Tile.Height);
+
+                if (_level.GetCollision(tileX + (int) _context._direction, tileY - 1) == TileCollision.Impassable ||
+                    _level.GetCollision(tileX + (int) _context._direction, tileY) == TileCollision.Passable)
                 {
-                    waitTime = MaxWaitTime;
+                    _context._state = _context._idleState;
+                    
+                    _context._state.Update(gameTime);
                 }
                 else
                 {
-                    // Move in the current direction.
-                    Vector2 velocity = new Vector2((int)direction * MoveSpeed * elapsed, 0.0f);
-                    position = position + velocity;
+                    var velocity = new Vector2((int) _context._direction * MoveSpeed * elapsed, 0.0f);
+                    _context._position += velocity;
+
+                    _animation.Update(gameTime, _context._position);
                 }
             }
-        }
 
-        /// <summary>
-        /// Draws the animated enemy.
-        /// </summary>
-        public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
-        {
-            // Stop running when the game is paused or before turning around.
-            if (!Level.Player.IsAlive ||
-                Level.ReachedExit ||
-                Level.TimeRemaining == TimeSpan.Zero ||
-                waitTime > 0)
+            public void Draw()
             {
-                sprite.PlayAnimation(idleAnimation);
+                _animation.Draw();
             }
-            else
-            {
-                sprite.PlayAnimation(runAnimation);
-            }
-
-
-            // Draw facing the way the enemy is moving.
-            SpriteEffects flip = direction > 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-            sprite.Draw(gameTime, spriteBatch, Position, flip);
         }
     }
 }

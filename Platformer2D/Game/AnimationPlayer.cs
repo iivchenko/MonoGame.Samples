@@ -21,11 +21,11 @@ namespace Platformer2D
         /// <summary>
         /// Gets the animation which is currently playing.
         /// </summary>
-        public Animation Animation
+        public old_Animation Animation
         {
             get { return animation; }
         }
-        Animation animation;
+        old_Animation animation;
 
         /// <summary>
         /// Gets the index of the current frame in the animation.
@@ -52,7 +52,7 @@ namespace Platformer2D
         /// <summary>
         /// Begins or continues playback of an animation.
         /// </summary>
-        public void PlayAnimation(Animation animation)
+        public void PlayAnimation(old_Animation animation)
         {
             // If this animation is already running, do not restart it.
             if (Animation == animation)

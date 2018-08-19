@@ -1,54 +1,30 @@
-﻿#region File Description
-//-----------------------------------------------------------------------------
-// Circle.cs
-//
-// Microsoft XNA Community Game Platform
-// Copyright (C) Microsoft Corporation. All rights reserved.
-//-----------------------------------------------------------------------------
-#endregion
-
-using System;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 
 namespace Platformer2D
 {
-    /// <summary>
-    /// Represents a 2D circle.
-    /// </summary>
-    struct Circle
+    public struct Circle
     {
-        /// <summary>
-        /// Center position of the circle.
-        /// </summary>
-        public Vector2 Center;
+        private readonly Vector2 _center;
+        private readonly float _radius;
 
-        /// <summary>
-        /// Radius of the circle.
-        /// </summary>
-        public float Radius;
-
-        /// <summary>
-        /// Constructs a new circle.
-        /// </summary>
         public Circle(Vector2 position, float radius)
         {
-            Center = position;
-            Radius = radius;
+            _center = position;
+            _radius = radius;
         }
 
-        /// <summary>
-        /// Determines if a circle intersects a rectangle.
-        /// </summary>
-        /// <returns>True if the circle and rectangle overlap. False otherwise.</returns>
         public bool Intersects(Rectangle rectangle)
         {
-            Vector2 v = new Vector2(MathHelper.Clamp(Center.X, rectangle.Left, rectangle.Right),
-                                    MathHelper.Clamp(Center.Y, rectangle.Top, rectangle.Bottom));
+            var v = new Vector2
+            (
+                MathHelper.Clamp(_center.X, rectangle.Left, rectangle.Right),
+                MathHelper.Clamp(_center.Y, rectangle.Top, rectangle.Bottom)
+            );
 
-            Vector2 direction = Center - v;
-            float distanceSquared = direction.LengthSquared();
+            var direction = _center - v;
+            var distanceSquared = direction.LengthSquared();
 
-            return ((distanceSquared > 0) && (distanceSquared < Radius * Radius));
+            return ((distanceSquared > 0) && (distanceSquared < _radius * _radius));
         }
     }
 }
